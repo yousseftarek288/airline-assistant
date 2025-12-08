@@ -107,6 +107,18 @@ def baseline_retrieve(intent: str, entities: Dict[str, Any]) -> BaselineContext:
         if base_where:
             where_clause = "WHERE " + " AND ".join(base_where)
 
+        min_food = entities.get("min_food_score")
+        max_food = entities.get("max_food_score")
+
+        if min_food is not None:
+            base_where.append("j.food_satisfaction_score >= $min_food")
+            params["min_food"] = min_food
+
+        if max_food is not None:
+            base_where.append("j.food_satisfaction_score <= $max_food")
+            params["max_food"] = max_food
+
+
         cypher = f"""
         MATCH (dep:Airport)<-[:DEPARTS_FROM]-(f:Flight)-[:ARRIVES_AT]->(arr:Airport)
         MATCH (j:Journey)-[:ON]->(f)

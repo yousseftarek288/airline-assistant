@@ -188,6 +188,18 @@ def detect_time_of_day(query: str) -> dict:
 
     return {}
 
+def detect_food_preference(query: str) -> dict:
+    q = query.lower()
+    # very simple rules
+    if "high food quality" in q or "very good food" in q or "best food" in q:
+        return {"min_food_score": 4}
+    if "good food" in q:
+        return {"min_food_score": 3}
+    if "bad food" in q or "terrible food" in q:
+        return {"max_food_score": 2}
+    return {}
+
+
 
 # ----------------------------
 # 6. Placeholder Embedding (Member C will replace later)
@@ -221,6 +233,7 @@ def preprocess(query: str) -> IntentResult:
     date_info = detect_date_expression(query)
     class_info = detect_class(query)
     time_info = detect_time_of_day(query)
+    food_info = detect_food_preference(query)
 
     # Merge all detected entities into one dictionary
     entities = {
@@ -229,6 +242,7 @@ def preprocess(query: str) -> IntentResult:
         **date_info,
         **class_info,
         **time_info,
+        **food_info,
     }
 
     embedding = dummy_embedding(query)
