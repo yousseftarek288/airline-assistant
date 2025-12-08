@@ -49,19 +49,20 @@ def detect_intent(query: str) -> str:
     """
     q = query.lower()
 
-    # Delay-related
-    if any(word in q for word in [
-        "delay", "delayed", "late", "on time", "punctual",
-        "early arrival", "ahead of time"
-    ]):
-        return "delay_query"
-
-    # Recommendation-related
+    # Recommendation-related FIRST
     if any(word in q for word in [
         "best", "recommend", "suggest", "smooth", "nice",
         "comfortable", "no delay", "good timings", "ideal", "which flight should i take"
     ]):
         return "recommendation"
+
+    # Delay-related NEXT
+    if any(word in q for word in [
+        "delay", "delayed", "late", "on time", "punctual","on-time","ontime"
+        "early arrival", "ahead of time"
+    ]):
+        return "delay_query"
+   
 
     # Satisfaction / experience-related
     if any(word in q for word in [
