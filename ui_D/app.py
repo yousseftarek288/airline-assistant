@@ -24,6 +24,17 @@ st.write("Ask about flights, delays, recommendations, classes, food quality, etc
 # ----------------------------
 user_query = st.text_input("Enter your query:", "")
 
+embedding_choice = st.selectbox(
+    "Embedding model (for semantic matches):",
+    ["TF-IDF", "Bag-of-Words"],
+)
+
+# map UI choice to internal code
+if embedding_choice == "TF-IDF":
+    embedding_model_name = "tfidf"
+else:
+    embedding_model_name = "bow"
+
 if st.button("Search") and user_query.strip():
     # 1. Preprocess
     intent_res = preprocess(user_query)
@@ -41,7 +52,13 @@ if st.button("Search") and user_query.strip():
         st.dataframe(base_ctx.rows)
 
     # 3. Embedding-based retrieval
-    emb_ctx = embedding_retrieve(user_query, intent_res, top_k=10)
+    emb_ctx = embedding_retrieve(
+    user_query,
+    intent_res,
+    model_name=embedding_model_name,
+    top_k=10,
+)
+
     st.subheader("🔍 Semantic Matches (Embedding-based Similar Flights)")
     if not emb_ctx.rows:
         st.warning("No similar flights found")

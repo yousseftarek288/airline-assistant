@@ -2,14 +2,17 @@
 #
 # Task C: Embedding-based Retrieval
 # - Build text descriptions of journeys from Neo4j
-# - Compute TF-IDF embeddings for those descriptions
+# - Compute embeddings with TWO models:
+#       1) TF-IDF (default)
+#       2) Bag-of-Words (CountVectorizer)
 # - Given a user query, find the most similar journeys
+# - Apply filters (class, min/max food score)
 # - Return them as EmbeddingContext
 
 from typing import List, Dict, Any, Optional
 
 from neo4j import GraphDatabase
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 import numpy as np
 
 from shared.config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
@@ -17,11 +20,15 @@ from shared.types import IntentResult, EmbeddingContext
 
 
 # ----------------------------
-# 1. Globals for the index
+# 1. Globals for the indexes
 # ----------------------------
 
-_VECTOR: Optional[TfidfVectorizer] = None
-_DOC_MATRIX: Optional[np.ndarray] = None
+_VECTOR_TFIDF: Optional[TfidfVectorizer] = None
+_DOC_MATRIX_TFIDF: Optional[np.ndarray] = None
+
+_VECTOR_BOW: Optional[CountVectorizer] = None
+_DOC_MATRIX_BOW: Optional[np.ndarray] = None
+
 _JOURNEY_ROWS: List[Dict[str, Any]] = []
 
 
@@ -60,15 +67,15 @@ def _load_journeys() -> List[Dict[str, Any]]:
         j.actual_flown_miles AS miles
     LIMIT 2000
     """
-    rows = _run_neo4j_query(cypher, {})
-    return rows
+    return _run_neo4j_query(cypher, {})
 
 
 def _build_text_description(row: Dict[str, Any]) -> str:
     """
     Turn a journey row into a text description for semantic search.
     Example:
-      'Flight 500 from LAX to IAX in economy class, delay -10 minutes, food score 4, 2000 miles.'
+      'Flight 500 from LAX to IAX in economy class, delay -10 minutes, 
+       food satisfaction 4 out of 5, 2000 miles.'
     """
     flight = row.get("flight")
     origin = row.get("origin")
@@ -103,26 +110,51 @@ def _ensure_index_built():
     Lazy initialization:
     - Load journeys from Neo4j
     - Build text descriptions
-    - Fit a TF-IDF vectorizer and compute the document matrix
+    - Fit TF-IDF vectorizer and Bag-of-Words vectorizer
     """
-    global _VECTOR, _DOC_MATRIX, _JOURNEY_ROWS
+    global _VECTOR_TFIDF, _DOC_MATRIX_TFIDF
+    global _VECTOR_BOW, _DOC_MATRIX_BOW
+    global _JOURNEY_ROWS
 
-    if _VECTOR is not None and _DOC_MATRIX is not None and _JOURNEY_ROWS:
+    if (
+        _VECTOR_TFIDF is not None
+        and _DOC_MATRIX_TFIDF is not None
+        and _VECTOR_BOW is not None
+        and _DOC_MATRIX_BOW is not None
+        and _JOURNEY_ROWS
+    ):
         # already built
         return
 
-    print("[Embeddings] Building TF-IDF index from Neo4j journeys...")
+    print("[Embeddings] Building indexes from Neo4j journeys...")
     _JOURNEY_ROWS = _load_journeys()
-
     documents = [_build_text_description(row) for row in _JOURNEY_ROWS]
 
-    _VECTOR = TfidfVectorizer()
-    _DOC_MATRIX = _VECTOR.fit_transform(documents)  # shape: (N_docs, N_terms)
-    print(f"[Embeddings] Indexed {len(_JOURNEY_ROWS)} journeys.")
+    # Model A: TF-IDF
+    _VECTOR_TFIDF = TfidfVectorizer()
+    _DOC_MATRIX_TFIDF = _VECTOR_TFIDF.fit_transform(documents)
+
+    # Model B: Bag-of-Words (CountVectorizer)
+    _VECTOR_BOW = CountVectorizer()
+    _DOC_MATRIX_BOW = _VECTOR_BOW.fit_transform(documents)
+
+    print(f"[Embeddings] Indexed {len(_JOURNEY_ROWS)} journeys "
+          f"with TF-IDF and Bag-of-Words.")
+
+
+def _get_matrix_and_vector(model_name: str):
+    """
+    Return the (matrix, vectorizer) pair for a given model name.
+    model_name: 'tfidf' or 'bow'
+    """
+    if model_name == "bow":
+        return _DOC_MATRIX_BOW, _VECTOR_BOW
+    # default to tfidf
+    return _DOC_MATRIX_TFIDF, _VECTOR_TFIDF
 
 
 # ----------------------------
-# 3. Embedding retrieval
+# 3. Build query text
 # ----------------------------
 
 def _build_query_text(query: str, intent: str, entities: Dict[str, Any]) -> str:
@@ -159,29 +191,48 @@ def _build_query_text(query: str, intent: str, entities: Dict[str, Any]) -> str:
     return " ".join(parts)
 
 
-def embedding_retrieve(user_query: str, intent_result: IntentResult, top_k: int = 10) -> EmbeddingContext:
+# ----------------------------
+# 4. Embedding retrieval with filters
+# ----------------------------
+
+def embedding_retrieve(
+    user_query: str,
+    intent_result: IntentResult,
+    model_name: str = "tfidf",
+    top_k: int = 10,
+) -> EmbeddingContext:
     """
     Main Task C function.
 
-    - Ensures index is built (loads journeys & builds TF-IDF matrix)
+    - Ensures index is built (loads journeys & builds matrices)
+    - Selects embedding model: 'tfidf' (default) or 'bow'
     - Builds a query text using user_query + intent + entities
     - Computes similarity to all journeys
-    - Applies same filters as baseline when possible:
+    - Applies filters similar to baseline:
         * class (economy / business / first)
         * min_food_score / max_food_score
     - Returns top_k most similar as EmbeddingContext(rows=[...])
     """
     _ensure_index_built()
 
-    if _VECTOR is None or _DOC_MATRIX is None or not _JOURNEY_ROWS:
+    if not _JOURNEY_ROWS:
         return EmbeddingContext(rows=[])
 
     entities = intent_result.entities or {}
     query_text = _build_query_text(user_query, intent_result.intent, entities)
 
+    # Pick matrix + vectorizer
+    doc_matrix, vectorizer = _get_matrix_and_vector(model_name)
+    if doc_matrix is None or vectorizer is None:
+        # Fallback to tfidf if something is wrong
+        doc_matrix, vectorizer = _get_matrix_and_vector("tfidf")
+
     # Vectorize the query
-    query_vec = _VECTOR.transform([query_text])  # shape: (1, N_terms)
-    scores = (_DOC_MATRIX @ query_vec.T).toarray().ravel()  # shape: (N_docs,)
+    query_vec = vectorizer.transform([query_text])  # shape: (1, N_terms)
+
+    # Cosine similarity between query and all docs
+    # For TF-IDF and CountVectorizer, dot product is enough (L2 norm similar scale)
+    scores = (doc_matrix @ query_vec.T).toarray().ravel()  # shape: (N_docs,)
 
     # Sort doc indices by similarity (high to low)
     sorted_indices = np.argsort(-scores)
@@ -221,13 +272,11 @@ def embedding_retrieve(user_query: str, intent_result: IntentResult, top_k: int 
     return EmbeddingContext(rows=results)
 
 
-
 # ----------------------------
-# 4. Manual test (run this file)
+# 5. Manual test (run this file)
 # ----------------------------
 
 if __name__ == "__main__":
-    # Fake an IntentResult like the one from Task A
     fake_entities = {
         "from": "LAX",
         "to": "IAX",
@@ -237,8 +286,9 @@ if __name__ == "__main__":
     fake_intent_result = IntentResult(intent=fake_intent, entities=fake_entities, query_embedding=None)
 
     test_query = "best economy flights from LAX to IAX with low delay and good food"
-    ctx = embedding_retrieve(test_query, fake_intent_result, top_k=5)
 
-    print("\n[Embedding Results]")
-    for row in ctx.rows:
-        print(row)
+    for model in ["tfidf", "bow"]:
+        print("\n=== Testing model:", model, "===")
+        ctx = embedding_retrieve(test_query, fake_intent_result, model_name=model, top_k=5)
+        for row in ctx.rows:
+            print(row)

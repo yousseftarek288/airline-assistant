@@ -2,7 +2,7 @@
 #
 # Task B: Baseline Retrieval using Cypher (no embeddings).
 # - Connects to your Milestone 2 Neo4j database
-# - Uses intent + entities (from Task A) to run exact graph queries
+# - Uses intent + entities (from Task A) to run multiple graph query templates
 # - Returns results wrapped in BaselineContext
 
 from neo4j import GraphDatabase
@@ -13,11 +13,7 @@ from shared.types import BaselineContext
 
 
 def _run_query(cypher: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """
-    Helper to run a Cypher query and return list of dict rows.
-    We create and close the driver inside this function to avoid
-    global driver cleanup issues at Python shutdown.
-    """
+    """Helper to run a Cypher query and return list of dict rows."""
     driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
     try:
         with driver.session() as session:
@@ -26,10 +22,6 @@ def _run_query(cypher: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
     finally:
         driver.close()
 
-
-# ----------------------------
-# Baseline retrieval logic
-# ----------------------------
 
 def baseline_retrieve(intent: str, entities: Dict[str, Any]) -> BaselineContext:
     """
@@ -49,15 +41,19 @@ def baseline_retrieve(intent: str, entities: Dict[str, Any]) -> BaselineContext:
     dest = entities.get("to")
     cabin_class = entities.get("class")      # e.g. "economy", "business"
     airline = entities.get("airline")        # e.g. "Emirates"
+    min_food = entities.get("min_food_score")
+    max_food = entities.get("max_food_score")
 
     # ----------------------------
-    # Intent: delay_query
+    # 1) DELAY QUERIES (D1, D2, D3)
     # ----------------------------
     if intent == "delay_query":
+        # D1: Route-specific delay stats (from + to)
         if origin and dest:
             cypher = """
             MATCH (dep:Airport {station_code: $origin})
-                  <-[:DEPARTS_FROM]-(f:Flight)-[:ARRIVES_AT]->(arr:Airport {station_code: $dest})
+                  <-[:DEPARTS_FROM]-(f:Flight)-[:ARRIVES_AT]->
+                  (arr:Airport {station_code: $dest})
             MATCH (j:Journey)-[:ON]->(f)
             RETURN
                 f.flight_number AS flight,
@@ -69,6 +65,25 @@ def baseline_retrieve(intent: str, entities: Dict[str, Any]) -> BaselineContext:
             LIMIT 10
             """
             rows = _run_query(cypher, {"origin": origin, "dest": dest})
+
+        # D2: Origin-only delay stats
+        elif origin:
+            cypher = """
+            MATCH (dep:Airport {station_code: $origin})
+                  <-[:DEPARTS_FROM]-(f:Flight)-[:ARRIVES_AT]->(arr:Airport)
+            MATCH (j:Journey)-[:ON]->(f)
+            RETURN
+                f.flight_number AS flight,
+                dep.station_code AS origin,
+                arr.station_code AS destination,
+                avg(j.arrival_delay_minutes) AS avg_delay,
+                count(j) AS journey_count
+            ORDER BY avg_delay ASC
+            LIMIT 10
+            """
+            rows = _run_query(cypher, {"origin": origin})
+
+        # D3: Global delay ranking
         else:
             cypher = """
             MATCH (j:Journey)-[:ON]->(f:Flight)
@@ -86,39 +101,44 @@ def baseline_retrieve(intent: str, entities: Dict[str, Any]) -> BaselineContext:
             rows = _run_query(cypher, {})
 
     # ----------------------------
-    # Intent: recommendation
+    # 2) RECOMMENDATION QUERIES (R1–R4)
     # ----------------------------
     elif intent == "recommendation":
-        base_where = []
         params: Dict[str, Any] = {}
+        where_clauses: List[str] = []
 
+        # Route filters
         if origin and dest:
-            base_where.append("dep.station_code = $origin AND arr.station_code = $dest")
+            where_clauses.append("dep.station_code = $origin AND arr.station_code = $dest")
             params["origin"] = origin
             params["dest"] = dest
+        elif origin:
+            # R3: origin-only recommendation
+            where_clauses.append("dep.station_code = $origin")
+            params["origin"] = origin
 
+        # Class filter (case-insensitive)
         if cabin_class:
-            # compare in lowercase so 'Economy' in DB matches 'economy' from Task A
-            base_where.append("toLower(j.passenger_class) = $class")
+            where_clauses.append("toLower(j.passenger_class) = $class")
             params["class"] = cabin_class.lower()
 
-
-        where_clause = ""
-        if base_where:
-            where_clause = "WHERE " + " AND ".join(base_where)
-
-        min_food = entities.get("min_food_score")
-        max_food = entities.get("max_food_score")
-
+        # Food-score preference (from preprocessing)
         if min_food is not None:
-            base_where.append("j.food_satisfaction_score >= $min_food")
+            where_clauses.append("j.food_satisfaction_score >= $min_food")
             params["min_food"] = min_food
-
         if max_food is not None:
-            base_where.append("j.food_satisfaction_score <= $max_food")
+            where_clauses.append("j.food_satisfaction_score <= $max_food")
             params["max_food"] = max_food
 
+        where_clause = ""
+        if where_clauses:
+            where_clause = "WHERE " + " AND ".join(where_clauses)
 
+        # R1–R4 are covered by different combinations of where_clauses:
+        # - origin+dest+class
+        # - origin+dest
+        # - origin only
+        # - nothing (global)
         cypher = f"""
         MATCH (dep:Airport)<-[:DEPARTS_FROM]-(f:Flight)-[:ARRIVES_AT]->(arr:Airport)
         MATCH (j:Journey)-[:ON]->(f)
@@ -137,18 +157,21 @@ def baseline_retrieve(intent: str, entities: Dict[str, Any]) -> BaselineContext:
         rows = _run_query(cypher, params)
 
     # ----------------------------
-    # Intent: satisfaction_analysis
+    # 3) SATISFACTION ANALYSIS (S1, S2)
     # ----------------------------
     elif intent == "satisfaction_analysis":
         params: Dict[str, Any] = {}
-        where_clauses = []
+        where_clauses: List[str] = []
 
+        # S1: Route-based satisfaction (from + to)
         if origin:
             where_clauses.append("dep.station_code = $origin")
             params["origin"] = origin
         if dest:
             where_clauses.append("arr.station_code = $dest")
             params["dest"] = dest
+
+        # S2: Airline-focused satisfaction
         if airline:
             where_clauses.append("f.fleet_type_description CONTAINS $airline")
             params["airline"] = airline
@@ -174,28 +197,49 @@ def baseline_retrieve(intent: str, entities: Dict[str, Any]) -> BaselineContext:
         rows = _run_query(cypher, params)
 
     # ----------------------------
-    # Fallback: general_flight_query
+    # 4) GENERAL / FALLBACK QUERIES (G1, G2)
     # ----------------------------
     else:
-        cypher = """
-        MATCH (dep:Airport)<-[:DEPARTS_FROM]-(f:Flight)-[:ARRIVES_AT]->(arr:Airport)
-        MATCH (j:Journey)-[:ON]->(f)
-        RETURN
-            f.flight_number AS flight,
-            dep.station_code AS origin,
-            arr.station_code AS destination,
-            avg(j.arrival_delay_minutes) AS avg_delay,
-            count(j) AS journey_count
-        ORDER BY journey_count DESC
-        LIMIT 10
-        """
-        rows = _run_query(cypher, {})
+        # G1: Route summary if from+to given
+        if origin and dest:
+            cypher = """
+            MATCH (dep:Airport {station_code: $origin})
+                  <-[:DEPARTS_FROM]-(f:Flight)-[:ARRIVES_AT]->
+                  (arr:Airport {station_code: $dest})
+            MATCH (j:Journey)-[:ON]->(f)
+            RETURN
+                f.flight_number AS flight,
+                dep.station_code AS origin,
+                arr.station_code AS destination,
+                avg(j.arrival_delay_minutes) AS avg_delay,
+                avg(j.food_satisfaction_score) AS avg_food,
+                count(j) AS journey_count
+            ORDER BY journey_count DESC
+            LIMIT 10
+            """
+            rows = _run_query(cypher, {"origin": origin, "dest": dest})
+
+        # G2: Global popular flights
+        else:
+            cypher = """
+            MATCH (dep:Airport)<-[:DEPARTS_FROM]-(f:Flight)-[:ARRIVES_AT]->(arr:Airport)
+            MATCH (j:Journey)-[:ON]->(f)
+            RETURN
+                f.flight_number AS flight,
+                dep.station_code AS origin,
+                arr.station_code AS destination,
+                avg(j.arrival_delay_minutes) AS avg_delay,
+                count(j) AS journey_count
+            ORDER BY journey_count DESC
+            LIMIT 10
+            """
+            rows = _run_query(cypher, {})
 
     return BaselineContext(rows=rows)
 
 
 # ----------------------------
-# Manual test
+# Manual quick test
 # ----------------------------
 
 if __name__ == "__main__":
