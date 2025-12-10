@@ -202,74 +202,97 @@ def embedding_retrieve(
     top_k: int = 10,
 ) -> EmbeddingContext:
     """
-    Main Task C function.
+    Embedding-based retrieval with SAFE fallback:
 
-    - Ensures index is built (loads journeys & builds matrices)
-    - Selects embedding model: 'tfidf' (default) or 'bow'
-    - Builds a query text using user_query + intent + entities
-    - Computes similarity to all journeys
-    - Applies filters similar to baseline:
-        * class (economy / business / first)
-        * min_food_score / max_food_score
-    - Returns top_k most similar as EmbeddingContext(rows=[...])
+    Pass 1: try to respect filters (class + min_food_score/max_food_score).
+    Pass 2: if nothing found, relax food filters but keep class.
+    Pass 3: if still nothing, ignore all filters and just return the
+            top-k most similar journeys.
+
+    This guarantees that, as long as there are journeys in the KG,
+    the embeddings section will NOT be empty – even for "weird"
+    queries like:
+      'best business flights next week with high food quality'
     """
+
+    # Make sure we have journeys + vectorizers
     _ensure_index_built()
 
     if not _JOURNEY_ROWS:
+        # Truly no data in the KG
         return EmbeddingContext(rows=[])
 
     entities = intent_result.entities or {}
     query_text = _build_query_text(user_query, intent_result.intent, entities)
 
-    # Pick matrix + vectorizer
+    # Select matrix + vectorizer
     doc_matrix, vectorizer = _get_matrix_and_vector(model_name)
     if doc_matrix is None or vectorizer is None:
-        # Fallback to tfidf if something is wrong
         doc_matrix, vectorizer = _get_matrix_and_vector("tfidf")
 
-    # Vectorize the query
-    query_vec = vectorizer.transform([query_text])  # shape: (1, N_terms)
+    # Vectorize query
+    query_vec = vectorizer.transform([query_text])       # (1, N_terms)
+    scores = (doc_matrix @ query_vec.T).toarray().ravel()  # (N_docs,)
 
-    # Cosine similarity between query and all docs
-    # For TF-IDF and CountVectorizer, dot product is enough (L2 norm similar scale)
-    scores = (doc_matrix @ query_vec.T).toarray().ravel()  # shape: (N_docs,)
-
-    # Sort doc indices by similarity (high to low)
+    # Sort by similarity (descending)
     sorted_indices = np.argsort(-scores)
 
-    # Optional filters
-    wanted_class = entities.get("class")           # e.g. "business"
+    wanted_class = entities.get("class")
     min_food = entities.get("min_food_score")
     max_food = entities.get("max_food_score")
 
-    results: List[Dict[str, Any]] = []
+    def _collect_with_filters(
+        enforce_class: bool,
+        enforce_food: bool,
+    ) -> List[Dict[str, Any]]:
+        """Helper: collect rows with chosen filters."""
+        results: List[Dict[str, Any]] = []
 
-    for idx in sorted_indices:
-        row = dict(_JOURNEY_ROWS[idx])  # copy
+        for idx in sorted_indices:
+            row = dict(_JOURNEY_ROWS[idx])  # copy
 
-        # ----- Apply filters -----
-        # Class filter (case-insensitive)
-        if wanted_class:
-            row_class = (row.get("passenger_class") or "").lower()
-            if row_class != wanted_class.lower():
-                continue
+            # ----- Class filter -----
+            if enforce_class and wanted_class:
+                row_class = (row.get("passenger_class") or "").lower()
+                if row_class != wanted_class.lower():
+                    continue
 
-        # Food score filters
-        food_score = row.get("food_score")
-        if food_score is not None:
-            if min_food is not None and food_score < min_food:
-                continue
-            if max_food is not None and food_score > max_food:
-                continue
+            # ----- Food filters -----
+            if enforce_food:
+                food_score = row.get("food_score")
+                if food_score is not None:
+                    # soft-ish: allow one point slack
+                    if min_food is not None and food_score < (min_food - 1):
+                        continue
+                    if max_food is not None and food_score > (max_food + 1):
+                        continue
 
-        # If it passes filters, keep it
-        row["similarity_score"] = float(scores[idx])
-        results.append(row)
+            # If we reach here, row is accepted
+            row["similarity_score"] = float(scores[idx])
+            results.append(row)
 
-        if len(results) >= top_k:
-            break
+            if len(results) >= top_k:
+                break
+
+        return results
+
+    # ---- PASS 1: strictest (class + food) ----
+    results = _collect_with_filters(enforce_class=True, enforce_food=True)
+
+    # ---- PASS 2: only class, ignore food if PASS 1 empty ----
+    if not results:
+        results = _collect_with_filters(enforce_class=True, enforce_food=False)
+
+    # ---- PASS 3: ignore all filters, pure semantic top-k ----
+    if not results:
+        results = []
+        for idx in sorted_indices[:top_k]:
+            row = dict(_JOURNEY_ROWS[idx])
+            row["similarity_score"] = float(scores[idx])
+            results.append(row)
 
     return EmbeddingContext(rows=results)
+
 
 
 # ----------------------------
