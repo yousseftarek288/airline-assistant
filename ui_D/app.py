@@ -3,7 +3,15 @@
 import sys
 import os
 from dotenv import load_dotenv
-load_dotenv()  
+
+# Load .env from the ui_D directory
+env_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(env_path, override=True)
+
+# Verify API key is loaded
+if not os.getenv("OPENROUTER_API_KEY"):
+    # Try loading from parent directory as fallback
+    load_dotenv(override=True)  
 
 # Make repo root importable (fix for streamlit)
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -27,9 +35,9 @@ st.write("Ask about flights, delays, recommendations, classes, food quality, etc
 # 🔽 LLM model selector (3 OpenRouter models + local baseline)
 LLM_OPTIONS = {
     "local_rule (no API)": "local_rule",
-    "Mistral: Mistral-7B": "mistralai/mistral-7b-instruct:free",
-    "Google: Gemini Flash": "google/gemini-2.0-flash-exp:free",
-    "Meta: Llama 3.2": "meta-llama/llama-3.2-3b-instruct:free",
+    "Mistral: 7B Instruct": "mistralai/mistral-7b-instruct",
+    "Meta: Llama 3.2 3B": "meta-llama/llama-3.2-3b-instruct",
+    "Google: Gemma 2 9B": "google/gemma-2-9b-it",
 }
 
 llm_label = st.selectbox(
@@ -167,12 +175,15 @@ def call_openrouter_model(model_id: str, prompt: str) -> str:
     if not api_key:
         return "[Error: OPENROUTER_API_KEY not found in environment]"
 
+    # Clean the API key (remove any whitespace)
+    api_key = api_key.strip()
+
     url = "https://openrouter.ai/api/v1/chat/completions"
 
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost",   # required by OpenRouter
+        "HTTP-Referer": "http://localhost:8501",   # required by OpenRouter
         "X-Title": "Airline Assistant",       # required by OpenRouter
     }
 
@@ -191,6 +202,15 @@ def call_openrouter_model(model_id: str, prompt: str) -> str:
         resp.raise_for_status()
         data = resp.json()
         return data["choices"][0]["message"]["content"]
+    except requests.exceptions.HTTPError as e:
+        # Get more detailed error info
+        error_detail = ""
+        try:
+            error_data = resp.json()
+            error_detail = f": {error_data.get('error', {}).get('message', str(error_data))}"
+        except:
+            error_detail = f": {resp.text}"
+        return f"[Error calling {model_id}: {resp.status_code} {resp.reason}{error_detail}]"
     except Exception as e:
         return f"[Error calling {model_id}: {e}]"
 
