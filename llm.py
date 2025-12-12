@@ -12,7 +12,6 @@ client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key="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",
 )
-
 # Free models to compare
 MODELS = {
     "deepseek-r1t2":     "tngtech/deepseek-r1t2-chimera:free",
