@@ -1,0 +1,230 @@
+{
+  "models": {
+    "Mistral 7B": "mistralai/mistral-7b-instruct",
+    "Llama 3.2 3B": "meta-llama/llama-3.2-3b-instruct",
+    "Gemma 2 9B": "google/gemma-2-9b-it"
+  },
+  "test_cases": [
+    {
+      "query": "Find me a business class flight from JFK to LAX with low delay",
+      "expected_focus": [
+        "business class",
+        "JFK",
+        "LAX",
+        "low delay"
+      ],
+      "difficulty": "easy"
+    },
+    {
+      "query": "Which economy flights have the best food quality?",
+      "expected_focus": [
+        "economy",
+        "food quality",
+        "high score"
+      ],
+      "difficulty": "medium"
+    },
+    {
+      "query": "I need a flight with minimal delays and good food, what do you recommend?",
+      "expected_focus": [
+        "low delay",
+        "good food",
+        "recommendation"
+      ],
+      "difficulty": "medium"
+    }
+  ],
+  "results": {
+    "Mistral 7B": [
+      {
+        "test_case": 1,
+        "query": "Find me a business class flight from JFK to LAX with low delay",
+        "difficulty": "easy",
+        "response": " <s> [OUT] I'm sorry, but there are no business class flights from JFK to LAX in the provided context. The closest alternatives are:\n\n1. Flight 680 from EWX to LAX (Economy, avg delay: -7.0 minutes, food score: 3.0/5, miles: 2227)\n2. Flight 1828 from IAX to LAX (Economy, avg delay: -4.0 minutes, food score: 3.0/5, miles: 938)\n\nThese flights have low delays and decent food scores, but they are not in business class.",
+        "response_time": 5.49565577507019,
+        "tokens": 767,
+        "prompt_tokens": 624,
+        "completion_tokens": 143,
+        "quality": {
+          "relevance": 5,
+          "completeness": 3.5,
+          "accuracy": 5.0,
+          "conciseness": 5.0,
+          "naturalness": 5,
+          "overall": 4.7,
+          "word_count": 73
+        },
+        "error": null
+      },
+      {
+        "test_case": 2,
+        "query": "Which economy flights have the best food quality?",
+        "difficulty": "medium",
+        "response": " <s> ",
+        "response_time": 2.404559373855591,
+        "tokens": 1039,
+        "prompt_tokens": 1032,
+        "completion_tokens": 7,
+        "quality": {
+          "relevance": 0.0,
+          "completeness": 0,
+          "accuracy": 3.0,
+          "conciseness": 2.0,
+          "naturalness": 4.0,
+          "overall": 1.8,
+          "word_count": 1
+        },
+        "error": null
+      },
+      {
+        "test_case": 3,
+        "query": "I need a flight with minimal delays and good food, what do you recommend?",
+        "difficulty": "medium",
+        "response": " <s> [B_INST] Based on the provided context, I can recommend the following flights that meet your criteria of minimal delays and good food:\n\n1. **Flight 2442 from TPX to EWX**\n   - **Avg Delay:** -99.0 minutes (significantly early)\n   - **Food Score:** 4.0/5 (excellent)\n   - **Miles:** 998.0\n   - **Why?** This flight has the best combination of minimal delays and high food quality. The negative delay indicates it arrives earlier than scheduled, and the food score is very good.\n\n2. **Flight 274 from NCX to EWX**\n   - **Avg Delay:** -60.0 minutes (early)\n   - **Food Score:** 4.0/5 (excellent)\n   - **Miles:** 4007.0\n   - **Why?** This flight also has a high food score and arrives early, making it a strong alternative.\n\n3. **Flight 907 from FRX to ORX**\n   - **Avg Delay:** -57.0 minutes (early)\n   - **Food Score:** 5.0/5 (perfect)\n   - **Miles:** 4344.0\n   - **Why?** While the miles are higher, this flight has the highest food score and a good delay record.\n\nIf these flights do not suit your travel plans, you may consider **Flight 122 from BCX to EWX** or **Flight 1830 from EWX to SFX**, both of which also have good food scores and minimal delays. [/B_INST] ",
+        "response_time": 13.683812379837036,
+        "tokens": 1344,
+        "prompt_tokens": 980,
+        "completion_tokens": 364,
+        "quality": {
+          "relevance": 1.67,
+          "completeness": 5,
+          "accuracy": 5.0,
+          "conciseness": 5.0,
+          "naturalness": 5,
+          "overall": 4.33,
+          "word_count": 192
+        },
+        "error": null
+      }
+    ],
+    "Llama 3.2 3B": [
+      {
+        "test_case": 1,
+        "query": "Find me a business class flight from JFK to LAX with low delay",
+        "difficulty": "easy",
+        "response": "I've searched for a business class flight from JFK to LAX with low delay. Based on the provided context, I found a few options:\n\n1. **Flight 1500 from EWX to LAX, class: Economy, avg delay: 2.0 minutes, food score: 5.0/5, miles: 2454, source: both, similarity: 0.384**\nAlthough this flight is not in business class, it has the lowest delay among all flights from JFK to LAX. However, it's not a direct flight from JFK to LAX, and its class is economy.\n\n2. **Flight 1828 from IAX to LAX, class: Economy, avg delay: -4.0 minutes, food score: 3.0/5, miles: 938, source: both, similarity: 0.407**\nThis flight has a negative delay, which is a good sign. However, its food score is only 3.0/5, and it's not a direct flight from JFK to LAX.\n\nUnfortunately, I couldn't find any direct business class flights from JFK to LAX with low delay. However, I can suggest an alternative:\n\n**Flight 680 from DEX to LAX, class: Economy, avg delay: -7.0 minutes, food score: 3.0/5, miles: 2227, source: embedding, similarity: 0.416**\nThis flight has a low delay and is a direct flight from JFK to LAX, but it's in economy class. If you're willing to consider economy, this could be a good option.",
+        "response_time": 4.292981386184692,
+        "tokens": 915,
+        "prompt_tokens": 577,
+        "completion_tokens": 338,
+        "quality": {
+          "relevance": 5,
+          "completeness": 5,
+          "accuracy": 5.0,
+          "conciseness": 4.0,
+          "naturalness": 5,
+          "overall": 4.8,
+          "word_count": 206
+        },
+        "error": null
+      },
+      {
+        "test_case": 2,
+        "query": "Which economy flights have the best food quality?",
+        "difficulty": "medium",
+        "response": "Based on the provided context, I've analyzed the economy flights and found a few options that meet the criteria.\n\nThe economy flights with the best food quality are:\n\n1. Flight 27 from LHX to DEX, class: Economy, avg delay: -7.0 minutes, food score: 5.0/5, miles: 4671, source: both, similarity: 0.205\n2. Flight 6 from IAX to LHX, class: Economy, avg delay: -6.0 minutes, food score: 4.0/5, miles: 4834, source: embedding, similarity: 0.235\n3. Flight 28 from DEX to LHX, class: Economy, avg delay: -6.0 minutes, food score: 3.0/5, miles: 4671, source: embedding, similarity: 0.205\n\nI recommend these flights because they have the highest food scores among the economy flights. Flight 27 has a perfect food score of 5.0/5, while Flights 6 and 28 have food scores of 4.0/5. Although Flight 28 has a lower food score, its delay is also very short, making it a good option.\n\nPlease note that these flights are the only ones that meet the criteria, and there may be other economy flights that are not listed in the context.",
+        "response_time": 5.693854570388794,
+        "tokens": 1231,
+        "prompt_tokens": 939,
+        "completion_tokens": 292,
+        "quality": {
+          "relevance": 3.33,
+          "completeness": 5,
+          "accuracy": 5.0,
+          "conciseness": 5.0,
+          "naturalness": 5,
+          "overall": 4.67,
+          "word_count": 174
+        },
+        "error": null
+      },
+      {
+        "test_case": 3,
+        "query": "I need a flight with minimal delays and good food, what do you recommend?",
+        "difficulty": "medium",
+        "response": "Based on your request for a flight with minimal delays and good food, I've analyzed the available flights. Here are my recommendations:\n\n1. **Flight 27 from LHX to DEX**: This flight has an average delay of -7.0 minutes, which is the shortest among all flights. Additionally, it has a food score of 5.0/5, indicating excellent food quality. With a distance of 4671 miles, it's a relatively short flight.\n2. **Flight 680 from DEX to EWX**: This flight also has an average delay of -7.0 minutes, making it another good option. Its food score is 3.0/5, which is slightly lower than Flight 27, but still acceptable. With a distance of 2227 miles, it's a shorter flight compared to some of the other options.\n3. **Flight 680 from EWX to LAX**: This flight has a similar delay of -7.0 minutes and a food score of 3.0/5, making it another viable option. Its distance of 2227 miles is also relatively short.\n\nThese flights meet your criteria of minimal delays and good food. However, please note that the food scores are not extremely high, but they are still acceptable. If you're looking for flights with higher food scores, you may want to consider other options.\n\nUnfortunately, I couldn't find any flights with a food score of 4.0/5 or higher, which is the minimum score you specified in your request. If you're willing to compromise on food score, the above-mentioned flights may be suitable options.",
+        "response_time": 14.749600172042847,
+        "tokens": 1227,
+        "prompt_tokens": 893,
+        "completion_tokens": 334,
+        "quality": {
+          "relevance": 3.33,
+          "completeness": 5,
+          "accuracy": 5.0,
+          "conciseness": 4.0,
+          "naturalness": 5,
+          "overall": 4.47,
+          "word_count": 240
+        },
+        "error": null
+      }
+    ],
+    "Gemma 2 9B": [
+      {
+        "test_case": 1,
+        "query": "Find me a business class flight from JFK to LAX with low delay",
+        "difficulty": "easy",
+        "response": "\n\nI apologize, but I don't have any business class flights from JFK to LAX in my current data. \n\nThe flights I have information on are all Economy class.  Would you like me to show you the Economy class flights from JFK to LAX? \n\n",
+        "response_time": 5.86974573135376,
+        "tokens": 675,
+        "prompt_tokens": 617,
+        "completion_tokens": 58,
+        "quality": {
+          "relevance": 3.75,
+          "completeness": 2.5,
+          "accuracy": 3.0,
+          "conciseness": 4.0,
+          "naturalness": 4.0,
+          "overall": 3.45,
+          "word_count": 43
+        },
+        "error": null
+      },
+      {
+        "test_case": 2,
+        "query": "Which economy flights have the best food quality?",
+        "difficulty": "medium",
+        "response": "\n\nBased on the information provided, here are the economy flights with a food score of 4.0/5 or higher:\n\n* **Flight 11:** Flight 27 from LHX to DEX (Economy, avg delay: -7.0 minutes, food score: 5.0/5, miles: 4671) \n* **Flight 14:** Flight 6 from IAX to LHX (Economy, avg delay: -6.0 minutes, food score: 4.0/5, miles: 4834) \n\n\nThese flights offer a good balance of food quality and minimal delays. \n",
+        "response_time": 3.5379459857940674,
+        "tokens": 1167,
+        "prompt_tokens": 1027,
+        "completion_tokens": 140,
+        "quality": {
+          "relevance": 3.33,
+          "completeness": 3.5,
+          "accuracy": 5.0,
+          "conciseness": 5.0,
+          "naturalness": 5,
+          "overall": 4.37,
+          "word_count": 68
+        },
+        "error": null
+      },
+      {
+        "test_case": 3,
+        "query": "I need a flight with minimal delays and good food, what do you recommend?",
+        "difficulty": "medium",
+        "response": "\n\nBased on your preference for minimal delays and good food, I recommend the following flights:\n\n* **Flight 907 from FRX to ORX:** This flight has an average delay of -57.0 minutes and a food score of 5.0/5, making it a top choice for both punctuality and dining experience. \n\n* **Flight 27 from LHX to DEX:** This flight has a very short average delay of -7.0 minutes and a great food score of 5.0/5. \n\n\nLet me know if you'd like to explore other options or have any further questions. \n\n",
+        "response_time": 2.1970412731170654,
+        "tokens": 1115,
+        "prompt_tokens": 978,
+        "completion_tokens": 137,
+        "quality": {
+          "relevance": 1.67,
+          "completeness": 5,
+          "accuracy": 5.0,
+          "conciseness": 5.0,
+          "naturalness": 5,
+          "overall": 4.33,
+          "word_count": 88
+        },
+        "error": null
+      }
+    ]
+  },
+  "summary": {
+    "Mistral 7B": 2.446532415707906,
+    "Llama 3.2 3B": 2.963452129046122,
+    "Gemma 2 9B": 3.0575089003245037
+  }
+}

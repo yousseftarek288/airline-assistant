@@ -1,0 +1,4 @@
+Model,Avg Response Time (s),Avg Total Tokens,Success Rate,Avg Overall Quality,Avg Relevance,Avg Completeness,Avg Accuracy,Avg Conciseness,Avg Naturalness,Weighted Score
+Mistral 7B,7.19,1050.0,3/3,3.61,2.22,2.83,4.33,4.0,4.67,2.45
+Llama 3.2 3B,8.25,1124.0,3/3,4.65,3.89,5.0,5.0,4.33,5.0,2.96
+Gemma 2 9B,3.87,986.0,3/3,4.05,2.92,3.67,4.33,4.67,4.67,3.06
